@@ -1,23 +1,23 @@
-import java.io.ByteArrayOutputStream
+import org.gradle.kotlin.dsl.invoke
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.aboutlibraries)
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.compose.compiler)
 }
 
 android {
-    namespace = "dev.beefers.vendetta.manager"
-    compileSdk = 35
+    namespace = "dev.soncresityindustries.schat.manager"
+    compileSdk = 37
 
     defaultConfig {
-        applicationId = "io.github.pyoncord.manager"
+        applicationId = "dev.soncresityindustries.schat.manager"
         minSdk = 28
         targetSdk = 35
         versionCode = 1100
-        versionName = "1.1.0"
+        versionName = "1.0.0"
 
         buildConfigField("String", "GIT_BRANCH", "\"${getCurrentBranch()}\"")
         buildConfigField("String", "GIT_COMMIT", "\"${getLatestCommit()}\"")
@@ -47,36 +47,37 @@ android {
         targetCompatibility = JavaVersion.VERSION_11
     }
 
-    kotlinOptions {
-        jvmTarget = "11"
-        freeCompilerArgs += listOf(
-            "-Xcontext-receivers",
-            "-P",
-            "plugin:androidx.compose.compiler.plugins.kotlin:reportsDestination=" +
-                    layout.buildDirectory.get().asFile.resolve("report").absolutePath,
-        )
-    }
+    kotlin(
+        configure = {
+            compilerOptions {
+                compilerOptions {
+                    jvmTarget.set(JvmTarget.JVM_11)
+                    freeCompilerArgs.addAll(
+                        "-Xcontext-parameters",
+                    )
+                }
+            }
+        }
+    )
 
     buildFeatures {
         compose = true
         buildConfig = true
     }
 
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.6"
-    }
-
-    androidComponents {
-        onVariants(selector().withBuildType("release")) {
-            it.packaging.resources.excludes.apply {
-                // Debug metadata
-                add("/**/*.version")
-                add("/kotlin-tooling-metadata.json")
-                // Kotlin debugging (https://github.com/Kotlin/kotlinx.coroutines/issues/2274)
-                add("/DebugProbesKt.bin")
+    androidComponents(
+        configure = {
+            onVariants(selector().withBuildType("release")) {
+                it.packaging.resources.excludes.apply {
+                    // Debug metadata
+                    add("/**/*.version")
+                    add("/kotlin-tooling-metadata.json")
+                    // Kotlin debugging (https://github.com/Kotlin/kotlinx.coroutines/issues/2274)
+                    add("/DebugProbesKt.bin")
+                }
             }
         }
-    }
+    )
 
     packaging {
         resources {
@@ -85,17 +86,19 @@ android {
         }
     }
 
-    configurations {
-        all {
-            exclude(module = "listenablefuture")
-            exclude(module = "error_prone_annotations")
-        }
+}
+
+configurations {
+    all {
+        exclude(module = "listenablefuture")
+        exclude(module = "error_prone_annotations")
     }
 }
 
 dependencies {
     implementation(platform(libs.compose.bom))
 
+    implementation(libs.aboutlibraries.core)
     implementation(libs.bundles.accompanist)
     implementation(libs.bundles.androidx)
     implementation(libs.bundles.coil)
@@ -107,7 +110,6 @@ dependencies {
 
     implementation(files("libs/lspatch.aar"))
 
-    implementation(libs.aboutlibraries.core)
     implementation(libs.binaryResources) {
         exclude(module = "checker-qual")
         exclude(module = "jsr305")
@@ -138,20 +140,12 @@ fun hasLocalChanges(): Boolean =
 
 fun exec(vararg command: String): String? {
     return try {
-        val stdout = ByteArrayOutputStream()
-        val errout = ByteArrayOutputStream()
-
-        exec {
-            commandLine = command.toList()
-            standardOutput = stdout
-            errorOutput = errout
-            isIgnoreExitValue = true
-        }
-
-        if(errout.size() > 0)
-            throw Error(errout.toString(Charsets.UTF_8))
-
-        stdout.toString(Charsets.UTF_8).trim()
+        val process = ProcessBuilder(*command).start()
+        val stdout = process.inputStream.bufferedReader().readText().trim()
+        val stderr = process.errorStream.bufferedReader().readText().trim()
+        process.waitFor()
+        if (stderr.isNotEmpty()) throw Error(stderr)
+        stdout
     } catch (e: Throwable) {
         e.printStackTrace()
         null

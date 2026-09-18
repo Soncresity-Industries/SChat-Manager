@@ -6,5 +6,9 @@ pluginManagement {
     }
 }
 
-rootProject.name = "Bunny Manager"
+plugins {
+    id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
+}
+
+rootProject.name = "SChat Manager"
 include(":app")
